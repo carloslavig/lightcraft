@@ -1682,3 +1682,12 @@ fn malformed_photo_targets_are_refused_not_widened() {
     let preset = s.presets.first().unwrap().id.clone();
     s.execute("preset.apply", &json!({"id": preset})).unwrap();
 }
+
+#[test]
+fn fractional_command_index_is_refused_and_whole_floats_still_work() {
+    let mut s = demo();
+    s.execute("version.create", &json!({"name": "A"})).unwrap();
+    assert!(s.execute("version.delete", &json!({"index": 0.9})).is_err(), "0.9 must not delete version 0");
+    assert!(s.execute("history.restore", &json!({"index": 0.5})).is_err());
+    assert!(s.execute("version.delete", &json!({"index": 0.0})).is_ok(), "2.0-style whole floats stay valid");
+}

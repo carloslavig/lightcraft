@@ -202,7 +202,8 @@ pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
 /// saturates to 0), just as `history.restore` already refuses a negative step index.
 pub(crate) fn index_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
     let i = f64_req(p, key, cmd)?;
-    if !(i.is_finite() && i >= 0.0) {
+    // 2^53: the largest range where an f64 holds every whole number exactly
+    if !(i.is_finite() && i >= 0.0 && i.fract() == 0.0 && i <= 9_007_199_254_740_992.0) {
         return Err(bad(cmd, format!("`{key}` must be a non-negative integer")));
     }
     Ok(i as usize)
