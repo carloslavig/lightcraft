@@ -1682,3 +1682,20 @@ fn malformed_photo_targets_are_refused_not_widened() {
     let preset = s.presets.first().unwrap().id.clone();
     s.execute("preset.apply", &json!({"id": preset})).unwrap();
 }
+
+#[test]
+fn malformed_mask_and_spot_targets_are_refused_not_defaulted() {
+    let mut s = demo();
+    s.execute("mask.add", &json!({"kind": "radial"})).ok();
+    for (cmd, params) in [
+        ("mask.delete", json!({"id": -1})),
+        ("mask.select", json!({"id": -1})),
+        ("mask.select", json!({"id": 4294967296u64})),
+        ("mask.update", json!({"component": -1, "shape": {"kind": "brush", "strokes": []}})),
+        ("spot.delete", json!({"index": -1})),
+        ("spot.select", json!({"index": -1})),
+    ] {
+        assert!(s.execute(cmd, &params).is_err(), "{cmd} {params} must be refused");
+    }
+    assert!(s.execute("mask.select", &json!({"id": null})).is_ok(), "null still clears the selection");
+}

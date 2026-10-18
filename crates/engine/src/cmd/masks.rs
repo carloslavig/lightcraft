@@ -199,8 +199,21 @@ fn connected_strokes(from: Point, last: &BrushStroke, to: BrushStroke) -> Vec<Br
     out
 }
 
+/// An optional whole-number target: omitted or null → `None`; present but not a whole number in
+/// range is an error, never "the active one" (issue #2098).
+fn opt_uint<T: TryFrom<u64>>(p: &Value, key: &str, c: &str) -> Result<Option<T>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| T::try_from(n).ok())
+            .map(Some)
+            .ok_or_else(|| bad(c, format!("`{key}` must be a non-negative whole number in range"))),
+    }
+}
+
 fn mask_id(p: &Value, active: Option<u32>, c: &str) -> Result<u32> {
-    p.get("id").and_then(Value::as_u64).map(|v| v as u32).or(active).ok_or_else(|| bad(c, "no mask selected (give `id`)"))
+    opt_uint(p, "id", c)?.or(active).ok_or_else(|| bad(c, "no mask selected (give `id`)"))
 }
 
 fn find(masks: &mut [Mask], id: u32, c: &str) -> Result<usize> {
@@ -307,7 +320,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let connect = bool_or(p, "connect", false);
                 let mut connected = false;
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
-                let want = p.get("id").and_then(Value::as_u64).map(|v| v as u32).or(s.active_mask);
+                let want = opt_uint::<u32>(p, "id", "mask.brushStroke")?.or(s.active_mask);
                 let adjust = super::mask_effects::new_mask_adjust(s, "brush");
                 let mut out = masks_edit(s, "mask.brushStroke", "Brush", |masks, active| {
                     let i = match want.and_then(|m| masks.iter().position(|x| x.id == m)) {
@@ -363,7 +376,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("mask.update", "Update Mask Shape", [], None, "{id?, component?: index (0), shape: MaskShape JSON}", has_active, |s, p| {
             let shape: MaskShape =
                 serde_json::from_value(p.get("shape").cloned().unwrap_or_default()).map_err(|e| bad("mask.update", e.to_string()))?;
-            let comp = p.get("component").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let comp = opt_uint::<usize>(p, "component", "mask.update")?.unwrap_or(0);
             let mid = mask_id(p, s.active_mask, "mask.update")?;
             masks_edit(s, "mask.update", "Edit Mask", |masks, _| {
                 let i = find(masks, mid, "mask.update")?;
@@ -604,7 +617,7 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!("mask.select", "Select Mask", [], None, "{id|null}", has_active, |s, p| {
-            s.active_mask = p.get("id").and_then(Value::as_u64).map(|v| v as u32);
+            s.active_mask = opt_uint(p, "id", "mask.select")?;
             ok()
         }),
         cmd!("mask.delete", "Delete Mask", [], None, "{id?}", has_active, |s, p| {
@@ -879,8 +892,8 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("spot.select", "Select Spot", [], None, "{index|null}", has_active, |s, p| {
             let n = spots_len(s);
-            s.active_spot = match p.get("index").and_then(Value::as_u64) {
-                Some(i) if (i as usize) < n => Some(i as usize),
+            s.active_spot = match opt_uint::<usize>(p, "index", "spot.select")? {
+                Some(i) if i < n => Some(i),
                 Some(_) => return Err(bad("spot.select", "no such spot")),
                 None => None,
             };
@@ -1040,7 +1053,7 @@ fn spots_len(s: &Session) -> usize {
 
 /// `index` from the params, else the selected spot.
 fn spot_index(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let i = p.get("index").and_then(Value::as_u64).map(|v| v as usize).or(s.active_spot).ok_or_else(|| bad(c, "no spot selected (give `index`)"))?;
+    let i = opt_uint::<usize>(p, "index", c)?.or(s.active_spot).ok_or_else(|| bad(c, "no spot selected (give `index`)"))?;
     if i >= spots_len(s) {
         return Err(bad(c, "no such spot"));
     }
