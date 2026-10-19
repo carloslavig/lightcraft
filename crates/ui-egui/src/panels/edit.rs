@@ -169,7 +169,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             // content, and the sliders below would run past its edge
             let max = ui.available_width() - 28.0 - ui.spacing().item_spacing.x;
             let r = crate::widgets::dropdown_within(ui, "profile", crate::i18n::profile_label(&d.profile.id, name), t.font(15.0), t.text_label, max);
-            egui::Popup::menu(&r).show(|ui| profile_menu(app, ui, &d));
+            // many imported profiles: scroll instead of running off the screen (issue #2059)
+            let max_h = ui.ctx().content_rect().height() * 0.8;
+            egui::Popup::menu(&r).show(|ui| egui::ScrollArea::vertical().max_height(max_h).show(ui, |ui| profile_menu(app, ui, &d)));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if crate::widgets::icon_button(
                     ui,
