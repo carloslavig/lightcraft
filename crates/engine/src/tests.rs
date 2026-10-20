@@ -1686,7 +1686,9 @@ fn malformed_photo_targets_are_refused_not_widened() {
 #[test]
 fn malformed_mask_and_spot_targets_are_refused_not_defaulted() {
     let mut s = demo();
-    s.execute("mask.add", &json!({"kind": "radial"})).ok();
+    s.execute("mask.add", &json!({"kind": "radial"})).expect("mask.add must work, or the refusals below prove nothing");
+    let (mask, spot) = (s.active_mask, s.active_spot);
+    assert!(mask.is_some(), "the added mask is active");
     for (cmd, params) in [
         ("mask.delete", json!({"id": -1})),
         ("mask.select", json!({"id": -1})),
@@ -1696,6 +1698,7 @@ fn malformed_mask_and_spot_targets_are_refused_not_defaulted() {
         ("spot.select", json!({"index": -1})),
     ] {
         assert!(s.execute(cmd, &params).is_err(), "{cmd} {params} must be refused");
+        assert_eq!((s.active_mask, s.active_spot), (mask, spot), "{cmd} {params} must not touch the active mask or spot");
     }
     assert!(s.execute("mask.select", &json!({"id": null})).is_ok(), "null still clears the selection");
 }
